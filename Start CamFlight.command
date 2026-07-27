@@ -1,12 +1,12 @@
 #!/bin/zsh
-# Double-click this file: starts the GROUNDSTATION server and opens the browser.
+# Double-click this file: starts the CamFlight server and opens the browser.
 # If the server is already running, it just opens the browser.
 cd "$(dirname "$0")"
 PORT=8765
 
 if nc -z 127.0.0.1 $PORT >/dev/null 2>&1; then
   open "http://localhost:$PORT"
-  echo "GROUNDSTATION was already running — browser opened."
+  echo "CamFlight was already running — browser opened."
   exit 0
 fi
 

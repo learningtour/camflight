@@ -1,9 +1,12 @@
-# GROUNDSTATION
+# CamFlight
 
-**Drone flight analysis for pilot training.** GROUNDSTATION matches the
-telemetry DJI drones write into an `.SRT` sidecar file to the video itself,
-frame by frame, and turns it into a debrief tool for training inspectors,
-camera operators and emergency-response pilots.
+**Post-flight analysis for drone camera work.** CamFlight matches the telemetry
+DJI drones write into an `.SRT` sidecar file to the video itself, frame by
+frame, and turns it into a debrief tool for training pilots — camera operators,
+inspectors and emergency-response crews.
+
+It does not fly anything. The drone has landed, the card is in the computer, and
+this is where you work out what the footage is actually telling you.
 
 No dependencies: **Python 3** (standard library only) and a modern browser.
 Everything stays on your own machine — only the map tiles and web fonts are
@@ -16,17 +19,17 @@ python3 server.py
 ```
 
 Then open <http://localhost:8765>. On macOS you can also double-click
-**`Start GROUNDSTATION.command`**, which starts the server and opens the
-browser for you.
+**`Start CamFlight.command`**, which starts the server and opens the browser
+for you.
 
 ## Where the video goes
 
 Each flight consists of the files the drone writes to its card: `*.MP4`
 (the 4K original), `*.LRF` (the 720p proxy, optional but recommended) and
-`*.SRT` (the telemetry). GROUNDSTATION looks for them in this order:
+`*.SRT` (the telemetry). CamFlight looks for them in this order:
 
 1. an explicit path: `python3 server.py 8765 /path/to/media`
-2. the `GROUNDSTATION_MEDIA` environment variable
+2. the `CAMFLIGHT_MEDIA` environment variable
 3. a `media_path.txt` file next to `server.py`, containing one line with a path
 4. `./media` — created on first run if nothing else is found
 
@@ -96,7 +99,7 @@ on every animation frame.
 | `server.py` | local server, video streaming, clip discovery |
 | `index.html` + `style.css` | interface |
 | `app.js` | SRT parsing, telemetry, HUD, charts, map, cues, markers |
-| `Start GROUNDSTATION.command` | one-click start on macOS |
+| `Start CamFlight.command` | one-click start on macOS |
 
 ## Notes and limits
 

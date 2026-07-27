@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GROUNDSTATION — local server for the drone flight analysis tool.
+CamFlight — local server for the drone flight analysis tool.
 
 Serves the web app and streams the video files with HTTP Range support,
 which the browser needs in order to seek and scrub.
@@ -12,7 +12,7 @@ Then:   open http://localhost:8765
 
 The media folder (DJI MP4/LRF/SRT files) is looked up in this order:
   1. the second command-line argument
-  2. the GROUNDSTATION_MEDIA environment variable
+  2. the CAMFLIGHT_MEDIA environment variable
   3. a "media_path.txt" file next to this script, containing one path
   4. ./media   (created on first run if nothing else is found)
 """
@@ -49,8 +49,8 @@ def resolve_media_dir() -> Path:
     candidates = []
     if len(sys.argv) > 2:
         candidates.append(Path(sys.argv[2]).expanduser())
-    if os.environ.get("GROUNDSTATION_MEDIA"):
-        candidates.append(Path(os.environ["GROUNDSTATION_MEDIA"]).expanduser())
+    if os.environ.get("CAMFLIGHT_MEDIA"):
+        candidates.append(Path(os.environ["CAMFLIGHT_MEDIA"]).expanduser())
     cfg = TOOL_DIR / "media_path.txt"
     if cfg.is_file():
         line = cfg.read_text(encoding="utf-8").strip()
@@ -195,7 +195,7 @@ class Server(socketserver.ThreadingTCPServer):
 
 
 if __name__ == "__main__":
-    print(f"GROUNDSTATION running at  http://localhost:{PORT}")
+    print(f"CamFlight running at  http://localhost:{PORT}")
     print(f"Media folder: {MEDIA_DIR}")
     if not list(MEDIA_DIR.glob("*.SRT")) and not list(MEDIA_DIR.glob("*.srt")):
         print("  (no clips yet — put the drone MP4/LRF/SRT files in this folder)")

@@ -1,6 +1,6 @@
 'use strict';
 /* ============================================================
-   GROUNDSTATION — drone flight analysis for pilot training
+   CamFlight — post-flight analysis for drone camera work
    Matches DJI SRT telemetry to the video, frame by frame.
    ============================================================ */
 
@@ -771,7 +771,7 @@ $('btnFull').onclick = () => setQuality('full');
 // ============================================================
 // MARKERS
 // ============================================================
-const storeKey = () => 'gs-markers-' + (S.clip?.id || 'x');
+const storeKey = () => 'camflight-markers-' + (S.clip?.id || 'x');
 function loadMarkers() {
   try { S.markers = JSON.parse(localStorage.getItem(storeKey()) || '[]'); }
   catch { S.markers = []; }
@@ -1065,7 +1065,7 @@ window.addEventListener('resize', () => {
     data = await res.json();
   } catch {
     $('loaderMsg').innerHTML =
-      'Cannot reach the GROUNDSTATION server.<br>' +
+      'Cannot reach the CamFlight server.<br>' +
       'Start it with <b>python3 server.py</b> in the project folder.<br>' +
       '<span class="retry-note">This page continues on its own once the server is up…</span>';
     const timer = setInterval(async () => {
