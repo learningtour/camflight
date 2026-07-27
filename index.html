@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GROUNDSTATION — Drone Flight Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛸</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">◭</div>
+    <div>
+      <h1>GROUNDSTATION</h1>
+      <p class="brand-sub">Drone flight analysis for pilot training</p>
+    </div>
+  </div>
+  <nav class="clip-tabs" id="clipTabs" aria-label="Clips"></nav>
+  <div class="top-actions">
+    <div class="seg" role="group" aria-label="Video quality">
+      <button id="btnProxy" class="seg-btn active" title="720p proxy (LRF) — smooth scrubbing">PROXY</button>
+      <button id="btnFull" class="seg-btn" title="4K original (HEVC) — heavier">4K</button>
+    </div>
+    <button id="btnEstimate" class="toggle-btn" title="Hide telemetry — let trainees estimate (T)">
+      <span class="dot"></span> ESTIMATE MODE
+    </button>
+  </div>
+</header>
+
+<main id="app" class="loading">
+
+  <!-- loading screen -->
+  <div id="loader" class="loader">
+    <div class="loader-box">
+      <div class="radar"><div class="sweep"></div></div>
+      <p id="loaderMsg">Loading clips…</p>
+    </div>
+  </div>
+
+  <!-- VIDEO -->
+  <section class="video-col panel">
+    <div class="video-stage" id="videoStage">
+      <video id="video" playsinline preload="auto"></video>
+      <button id="bigPlay" class="big-play" aria-label="Play">▶</button>
+    </div>
+
+    <!-- timeline -->
+    <canvas id="timeline" class="timeline" height="72"></canvas>
+
+    <div class="transport">
+      <div class="transport-left">
+        <button id="btnPlay" class="tbtn primary" title="Play/pause (space)">▶</button>
+        <button id="btnPrevFrame" class="tbtn" title="1 frame back (←)">⏮︎</button>
+        <button id="btnNextFrame" class="tbtn" title="1 frame forward (→)">⏭︎</button>
+        <div class="seg small" role="group" aria-label="Playback speed">
+          <button class="seg-btn spd" data-spd="0.25">¼×</button>
+          <button class="seg-btn spd" data-spd="0.5">½×</button>
+          <button class="seg-btn spd active" data-spd="1">1×</button>
+          <button class="seg-btn spd" data-spd="2">2×</button>
+        </div>
+      </div>
+      <div class="transport-center">
+        <span class="transport-clip" id="tcClip">—</span>
+        <span class="transport-time mono" id="timeReadout" title="min:sec:frame">00:00:00 / 00:00:00</span>
+        <span class="tc-hint mono" id="tcHint">min:sec:frm</span>
+      </div>
+      <div class="transport-right">
+        <button id="btnMarker" class="tbtn accent" title="Drop a marker at this moment (M)">⚑ MARKER</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SIDE COLUMN: HUD + MAP -->
+  <aside class="side-col">
+    <section class="panel hud-panel" id="hudPanel">
+      <header class="panel-head">
+        <h2>TELEMETRY</h2>
+        <span class="mono head-note" id="hudFrame">frame —</span>
+      </header>
+      <div class="hud-grid" id="hudGrid">
+        <div class="hud-cell wide"><label>Altitude (above takeoff)</label><output class="big" id="tAlt">—</output><span class="unit">m</span></div>
+        <div class="hud-cell wide"><label>Ground speed</label><output class="big" id="tSpeed">—</output><span class="unit">km/h</span></div>
+        <div class="hud-cell"><label>Altitude AMSL</label><output id="tAbsAlt">—</output><span class="unit">m</span></div>
+        <div class="hud-cell"><label>Climb/descent</label><output id="tVSpeed">—</output><span class="unit">m/s</span></div>
+        <div class="hud-cell"><label>Heading</label><output id="tHeading">—</output><span class="unit" id="tHeadingArrow">·</span></div>
+        <div class="hud-cell"><label>Distance from home</label><output id="tDist">—</output><span class="unit">m</span></div>
+        <div class="hud-sep" data-label="CAMERA"></div>
+        <div class="hud-cell"><label>ISO</label><output id="tIso">—</output></div>
+        <div class="hud-cell"><label>Shutter</label><output id="tShutter">—</output><span class="unit">s</span></div>
+        <div class="hud-cell"><label>Aperture</label><output id="tFnum">—</output></div>
+        <div class="hud-cell"><label>EV</label><output id="tEv">—</output></div>
+        <div class="hud-cell"><label>Color temp</label><output id="tCt">—</output><span class="unit">K</span></div>
+        <div class="hud-cell"><label>Profile · focal</label><output id="tColor">—</output></div>
+        <div class="hud-sep" data-label="POSITION &amp; TIME"></div>
+        <div class="hud-cell"><label>Camera clock</label><output id="tClock">—</output></div>
+        <div class="hud-cell"><label>Frame no.</label><output id="tFrameNo">—</output></div>
+        <div class="hud-cell wide gps"><label>GPS</label><output class="mono-sm" id="tGps">—</output>
+          <button id="btnCopyGps" class="mini-btn" title="Copy coordinates">⧉</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel map-panel">
+      <header class="panel-head">
+        <h2>FLIGHT PATH</h2>
+        <div class="head-actions">
+          <button id="btnLayer" class="mini-btn" title="Switch map layer">SAT</button>
+          <button id="btnFollow" class="mini-btn active" title="Follow the drone">FOLLOW</button>
+        </div>
+      </header>
+      <div id="map" class="map"></div>
+    </section>
+  </aside>
+
+  <!-- BOTTOM ROW: CHARTS + LOG -->
+  <section class="panel charts-panel">
+    <header class="panel-head">
+      <h2>FLIGHT PROFILE</h2>
+      <div class="stats-strip" id="statsStrip"></div>
+    </header>
+    <div class="charts" id="charts">
+      <figure class="chart"><figcaption>ALTITUDE <span class="mono cap-unit">m</span></figcaption><canvas id="chAlt"></canvas></figure>
+      <figure class="chart"><figcaption>SPEED <span class="mono cap-unit">km/h</span></figcaption><canvas id="chSpeed"></canvas></figure>
+      <figure class="chart"><figcaption>ISO <span class="mono cap-unit">exposure</span></figcaption><canvas id="chIso"></canvas></figure>
+    </div>
+  </section>
+
+  <section class="panel log-panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="coach">COACHING CUES <span class="count" id="coachCount">0</span></button>
+      <button class="tab" data-tab="markers">MARKERS <span class="count" id="markerCount">0</span></button>
+    </div>
+    <div class="tab-body" id="tabCoach">
+      <ul class="log-list" id="coachList"></ul>
+    </div>
+    <div class="tab-body hidden" id="tabMarkers">
+      <form id="markerForm" class="marker-form">
+        <select id="markerCat">
+          <option value="observation">Observation</option>
+          <option value="risk">Risk</option>
+          <option value="camera">Camera</option>
+          <option value="navigation">Navigation</option>
+          <option value="poi">POI / inspection point</option>
+        </select>
+        <input id="markerNote" type="text" placeholder="Note… (Enter drops it at the current moment)" autocomplete="off">
+        <button type="submit" class="tbtn accent">⚑</button>
+      </form>
+      <ul class="log-list" id="markerList"></ul>
+      <div class="log-actions">
+        <button id="btnExportJson" class="mini-btn">EXPORT JSON</button>
+        <button id="btnExportCsv" class="mini-btn">EXPORT CSV</button>
+        <label class="mini-btn" for="importFile">IMPORT</label>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span class="mono">SPACE play · ←/→ frame · SCROLL on video/timeline = frame · SHIFT+←/→ 1s · M marker · T estimate mode · 1-4 speed</span>
+  <span class="mono dim" id="footClip">—</span>
+</footer>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

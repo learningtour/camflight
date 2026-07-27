@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+
+# local machine configuration — never published
+media_path.txt
+media/
