@@ -62,6 +62,22 @@ to the 4K original, which scrubs less smoothly.
   | Shutter vs. the 180° rule | stuttery motion for cinematic work |
   | Approaching the 120 m limit | EU open-category ceiling |
 
+- **Trainer review** — the debrief itself. A trainer watches the flight and
+  presses **R** at the moment something matters; the instruction is tied to that
+  exact frame. Pick a type (instruction, point to improve, safety, well done),
+  write it, choose how long it stays on screen, and optionally have the video
+  **pause there** so the operator cannot scroll past it.
+
+  On replay the instruction surfaces at its own frame as a colour-coded card,
+  either over the video or in a band below it, while the frame itself is ringed
+  in the same colour. The timeline gets a lane along the top edge showing where
+  the instructions are and how long each one runs.
+
+  A **TRAINER / OPERATOR** switch turns the tool into playback mode: the
+  authoring form disappears and only the instructions play. **Export review**
+  writes a JSON file — send it to the operator, who imports it next to their own
+  copy of the footage and sees the feedback appear at the right moments.
+
 - **Markers** — drop timestamped notes by category (observation, risk, camera,
   navigation, POI), stored per clip in the browser, with export to JSON and CSV
   including the GPS position and telemetry at that moment. Import brings a
@@ -80,6 +96,7 @@ to the 4K original, which scrubs less smoothly.
 | ← / → | one frame back / forward |
 | Scroll over video or timeline | one frame per notch |
 | Shift + ← / → | one second back / forward |
+| R | write a trainer instruction for the current frame |
 | M | drop a marker at the current moment |
 | T | toggle estimate mode |
 | 1–4 | speed ¼× · ½× · 1× · 2× |
@@ -98,7 +115,7 @@ on every animation frame.
 |---|---|
 | `server.py` | local server, video streaming, clip discovery |
 | `index.html` + `style.css` | interface |
-| `app.js` | SRT parsing, telemetry, HUD, charts, map, cues, markers |
+| `app.js` | SRT parsing, telemetry, HUD, charts, map, cues, review, markers |
 | `Start CamFlight.command` | one-click start on macOS |
 
 ## Notes and limits
@@ -109,8 +126,10 @@ on every animation frame.
   controller, so they lag slightly behind sharp manoeuvres.
 - 4K HEVC playback depends on the browser; Safari and recent Chrome on macOS
   handle it, others may need the proxy.
-- Markers live in the browser's local storage, per clip. Export them if they
-  matter.
+- Markers and trainer instructions live in the browser's local storage, per
+  clip. Export them if they matter.
+- A review file references a clip by filename, not by content. Trainer and
+  operator need the same clip for the timecodes to line up.
 
 ## License
 

@@ -86,12 +86,19 @@ const S = {
   smp: null,           // downsampled series for charts/map
   events: [],          // coaching cues
   markers: [],
+  reviews: [],         // trainer instructions, tied to a moment
   fps: 50,
   duration: 0,
   quality: 'proxy',
   follow: true,
   sat: false,
   estimate: false,
+  role: 'trainer',     // trainer writes, operator only watches
+  cuePos: 'over',      // instructions over the video, or below the frame
+  pendingT: null,      // frame captured for the instruction being written
+  pausedByCue: null,   // id of the instruction that stopped playback
+  firedPauses: new Set(),
+  shownCueIds: '',
 };
 
 const video = $('video');
@@ -492,14 +499,28 @@ function renderTimelineStatic() {
     }
   };
 
+  // trainer instructions get their own lane along the top edge, spanning
+  // however long each one stays on screen
+  const drawReviewLane = () => {
+    for (const r of S.reviews) {
+      const k = REVIEW_KINDS[r.kind] || REVIEW_KINDS.instruction;
+      c.fillStyle = k.color;
+      c.fillRect(x(r.t), 0, Math.max(3, x(r.t + r.dur) - x(r.t)), 4);
+      if (r.pause) {   // a notch marks the ones that stop playback
+        c.fillRect(x(r.t) - 1, 0, 2, 9);
+      }
+    }
+  };
+
   if (S.estimate) {
     // estimate mode: ruler and marker ticks only — the profile would give the answer away
     drawRuler();
+    drawReviewLane();
     for (const mk of S.markers) {
       const mx = x(mk.t);
       c.strokeStyle = CAT[mk.cat]?.color || '#ffb000';
       c.lineWidth = 1.5;
-      c.beginPath(); c.moveTo(mx, 4); c.lineTo(mx, H - 20); c.stroke();
+      c.beginPath(); c.moveTo(mx, 10); c.lineTo(mx, H - 20); c.stroke();
     }
     tlStatic = off;
     return;
@@ -528,15 +549,16 @@ function renderTimelineStatic() {
   }
 
   drawRuler();
+  drawReviewLane();
 
   // markers
   for (const mk of S.markers) {
     const mx = x(mk.t);
     c.strokeStyle = CAT[mk.cat]?.color || '#ffb000';
     c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(mx, 4); c.lineTo(mx, H - 20); c.stroke();
+    c.beginPath(); c.moveTo(mx, 10); c.lineTo(mx, H - 20); c.stroke();
     c.fillStyle = CAT[mk.cat]?.color || '#ffb000';
-    c.beginPath(); c.moveTo(mx, 4); c.lineTo(mx + 7, 8); c.lineTo(mx, 12); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(mx, 10); c.lineTo(mx + 7, 14); c.lineTo(mx, 18); c.closePath(); c.fill();
   }
   tlStatic = off;
 }
@@ -705,7 +727,11 @@ function setPlaying(playing) {
   if (playing) video.play().catch(() => {});
   else video.pause();
 }
-video.addEventListener('play', () => { $('btnPlay').textContent = '❚❚'; $('bigPlay').classList.add('hidden'); });
+video.addEventListener('play', () => {
+  $('btnPlay').textContent = '❚❚';
+  $('bigPlay').classList.add('hidden');
+  S.pausedByCue = null;   // playing on means the trainer's stop has been acknowledged
+});
 video.addEventListener('pause', () => { $('btnPlay').textContent = '▶'; $('bigPlay').classList.remove('hidden'); });
 video.addEventListener('error', () => {
   if (S.quality === 'full') {
@@ -878,6 +904,224 @@ $('importFile').addEventListener('change', async e => {
 });
 
 // ============================================================
+// TRAINER REVIEW
+// Instructions a trainer writes for one moment in the flight, which
+// surface again at exactly that frame when the operator replays it.
+// ============================================================
+const REVIEW_KINDS = {
+  instruction: { label: 'INSTRUCTION', color: '#3987e5', ic: '◈' },
+  improve:     { label: 'TO IMPROVE',  color: '#d95926', ic: '▲' },
+  safety:      { label: 'SAFETY',      color: '#d03b3b', ic: '⬤' },
+  praise:      { label: 'WELL DONE',   color: '#0ca30c', ic: '◆' },
+};
+const reviewKey = () => 'camflight-review-' + (S.clip?.id || 'x');
+
+function loadReviews() {
+  try { S.reviews = JSON.parse(localStorage.getItem(reviewKey()) || '[]'); }
+  catch { S.reviews = []; }
+  S.reviews.sort((a, b) => a.t - b.t);
+  S.pendingT = null;
+  S.firedPauses.clear();
+  S.shownCueIds = '';
+}
+function saveReviews() {
+  localStorage.setItem(reviewKey(), JSON.stringify(S.reviews));
+  renderReviews();
+  renderTimelineStatic();
+}
+
+function addReview(kind, text, dur, pause) {
+  const t = S.pendingT ?? video.currentTime;
+  S.reviews.push({
+    id: Date.now() + '' + Math.floor(Math.random() * 1e4),
+    t, dur: clamp(dur || 6, 1, 60), kind, text, pause: !!pause,
+  });
+  S.reviews.sort((a, b) => a.t - b.t);
+  S.pendingT = null;
+  saveReviews();
+  toast(`${REVIEW_KINDS[kind].ic} Instruction saved at ${fmtTc(t)}`);
+}
+
+// Capture the current frame and open the form for it (R, or the transport button)
+function captureReviewMoment() {
+  if (S.role === 'operator') {
+    toast('Switch to trainer mode to write instructions.');
+    return;
+  }
+  video.pause();
+  S.pendingT = video.currentTime;
+  document.querySelector('[data-tab="review"]').click();
+  $('reviewAt').textContent = 'at ' + fmtTc(S.pendingT);
+  if (S.role === 'trainer') $('reviewText').focus();
+}
+$('btnReview').onclick = captureReviewMoment;
+
+$('reviewForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = $('reviewText').value.trim();
+  if (!text) { toast('Write the instruction first.'); return; }
+  addReview($('reviewKind').value, text, +$('reviewDur').value, $('reviewPause').checked);
+  $('reviewText').value = '';
+  $('reviewPause').checked = false;
+});
+
+function renderReviews() {
+  const ul = $('reviewList');
+  ul.innerHTML = '';
+  for (const r of S.reviews) {
+    const k = REVIEW_KINDS[r.kind] || REVIEW_KINDS.instruction;
+    const li = document.createElement('li');
+    li.className = 'log-item';
+    li.innerHTML =
+      `<span class="li-time">${fmtTc(r.t)}</span>` +
+      `<span class="li-kind" style="color:${k.color}"><span class="sev-ic">${k.ic}</span>${k.label}</span>` +
+      `<span class="li-text">${escapeHtml(r.text)}</span>` +
+      `<span class="li-dur">${r.dur}s${r.pause ? ' <span class="li-pause" title="pauses the video here">❚❚</span>' : ''}</span>` +
+      `<button class="li-del" title="Delete">✕</button>`;
+    li.onclick = e => {
+      if (e.target.classList.contains('li-del')) {
+        S.reviews = S.reviews.filter(x => x.id !== r.id);
+        saveReviews();
+      } else seekTo(r.t);
+    };
+    ul.appendChild(li);
+  }
+  $('reviewCount').textContent = S.reviews.length;
+}
+
+// ---------- playback: show each instruction at its own frame ----------
+function renderCues(active, pausedById) {
+  const layer = S.cuePos === 'over' ? $('cueLayer') : $('cueLayerBelow');
+  const other = S.cuePos === 'over' ? $('cueLayerBelow') : $('cueLayer');
+  other.innerHTML = '';
+  layer.innerHTML = '';
+
+  for (const r of active) {
+    const k = REVIEW_KINDS[r.kind] || REVIEW_KINDS.instruction;
+    const el = document.createElement('div');
+    el.className = 'cue';
+    el.style.setProperty('--cue', k.color);
+    el.innerHTML =
+      `<div class="cue-head">` +
+        `<span class="cue-ic">${k.ic}</span>${k.label}` +
+        `<span class="cue-from">· TRAINER</span>` +
+        `<span class="cue-time">${fmtTc(r.t)}</span>` +
+      `</div>` +
+      `<p class="cue-text">${escapeHtml(r.text)}</p>`;
+    if (pausedById === r.id) {
+      const btn = document.createElement('button');
+      btn.className = 'cue-resume';
+      btn.textContent = 'CONTINUE ▶';
+      btn.onclick = () => { S.pausedByCue = null; video.play().catch(() => {}); };
+      el.appendChild(btn);
+    }
+    layer.appendChild(el);
+  }
+
+  // mark the frame itself while an instruction is on screen
+  const stage = $('videoStage');
+  if (active.length && S.cuePos === 'over') {
+    stage.classList.add('cue-active');
+    stage.style.setProperty('--cue-ring', (REVIEW_KINDS[active[0].kind] || REVIEW_KINDS.instruction).color);
+  } else {
+    stage.classList.remove('cue-active');
+  }
+}
+
+// The main loop runs on requestAnimationFrame, which the browser suspends
+// while the tab is hidden — so an auto-pause could be played straight past.
+// timeupdate keeps firing regardless, so it acts as the safety net.
+video.addEventListener('timeupdate', () => updateCues(video.currentTime));
+
+let prevTime = 0;
+function updateCues(now) {
+  const active = S.reviews.filter(r => now >= r.t && now < r.t + r.dur);
+
+  // auto-pause: fire once per pass, and re-arm when the user scrubs back
+  for (const r of S.reviews) {
+    if (!r.pause) continue;
+    if (now < r.t - 0.05) S.firedPauses.delete(r.id);
+    else if (!S.firedPauses.has(r.id) && prevTime <= r.t && now >= r.t && !video.paused) {
+      S.firedPauses.add(r.id);
+      S.pausedByCue = r.id;
+      video.pause();
+    }
+  }
+  prevTime = now;
+  // the resume button belongs to one instruction; drop it once we leave it
+  if (S.pausedByCue && !active.some(r => r.id === S.pausedByCue)) S.pausedByCue = null;
+
+  // only touch the DOM when the visible set actually changes
+  const ids = active.map(r => r.id).join(',') + '|' + (S.pausedByCue || '');
+  if (ids !== S.shownCueIds) {
+    S.shownCueIds = ids;
+    renderCues(active, S.pausedByCue);
+  }
+}
+
+// ---------- roles, placement, exchange ----------
+function setRole(role, announce = true) {
+  S.role = role;
+  document.body.classList.toggle('operator', role === 'operator');
+  $('btnRoleTrainer').classList.toggle('active', role === 'trainer');
+  $('btnRoleOperator').classList.toggle('active', role === 'operator');
+  localStorage.setItem('camflight-role', role);
+  if (announce) {
+    toast(role === 'trainer'
+      ? 'Trainer mode — write instructions while you watch.'
+      : 'Operator mode — instructions play back, editing is hidden.');
+  }
+}
+$('btnRoleTrainer').onclick = () => setRole('trainer');
+$('btnRoleOperator').onclick = () => setRole('operator');
+
+function setCuePos(pos) {
+  S.cuePos = pos;
+  $('btnCuePos').textContent = pos === 'over' ? 'ON VIDEO' : 'BELOW VIDEO';
+  $('btnCuePos').classList.toggle('active', pos === 'over');
+  localStorage.setItem('camflight-cue-pos', pos);
+  S.shownCueIds = '';   // force a redraw into the other layer
+}
+$('btnCuePos').onclick = () => setCuePos(S.cuePos === 'over' ? 'below' : 'over');
+
+$('btnReviewExport').onclick = () => {
+  if (!S.reviews.length) { toast('No instructions to export yet.'); return; }
+  const data = {
+    tool: 'CamFlight', type: 'review',
+    clip: S.clip.id, exported: new Date().toISOString(),
+    reviews: S.reviews.map(r => ({ ...r, timecode: fmtTc(r.t), telemetry: telemetryAt(r.t) })),
+  };
+  download(S.clip.id + '_review.json', 'application/json', JSON.stringify(data, null, 2));
+  toast(`Exported ${S.reviews.length} instruction(s) — send this file to the operator.`);
+};
+
+$('reviewImport').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const arr = Array.isArray(data) ? data : data.reviews;
+    if (!arr) throw new Error('no reviews in file');
+    let added = 0;
+    for (const r of arr) {
+      if (typeof r.t !== 'number' || !r.text) continue;
+      if (S.reviews.some(x => x.id === r.id)) continue;
+      S.reviews.push({
+        id: r.id || Date.now() + '' + added,
+        t: r.t, dur: clamp(r.dur || 6, 1, 60),
+        kind: REVIEW_KINDS[r.kind] ? r.kind : 'instruction',
+        text: r.text, pause: !!r.pause,
+      });
+      added++;
+    }
+    S.reviews.sort((a, b) => a.t - b.t);
+    saveReviews();
+    toast(added ? `${added} instruction(s) imported.` : 'Nothing new in that file.');
+  } catch { toast('Could not read that file as a CamFlight review.'); }
+  e.target.value = '';
+});
+
+// ============================================================
 // CUE LIST & TABS
 // ============================================================
 function renderEvents() {
@@ -901,6 +1145,7 @@ document.querySelectorAll('.tab').forEach(tab => {
   tab.onclick = () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
     $('tabCoach').classList.toggle('hidden', tab.dataset.tab !== 'coach');
+    $('tabReview').classList.toggle('hidden', tab.dataset.tab !== 'review');
     $('tabMarkers').classList.toggle('hidden', tab.dataset.tab !== 'markers');
   };
 });
@@ -944,6 +1189,7 @@ document.addEventListener('keydown', e => {
   else if (e.code === 'ArrowLeft') { e.preventDefault(); video.pause(); seekTo(video.currentTime - (e.shiftKey ? 1 : 1 / S.fps)); }
   else if (e.code === 'ArrowRight') { e.preventDefault(); video.pause(); seekTo(video.currentTime + (e.shiftKey ? 1 : 1 / S.fps)); }
   else if (e.code === 'KeyM') { $('btnMarker').click(); }
+  else if (e.code === 'KeyR') { e.preventDefault(); captureReviewMoment(); }
   else if (e.code === 'KeyT') { setEstimate(!S.estimate); }
   else if (spds[e.code]) {
     document.querySelector(`.spd[data-spd="${spds[e.code]}"]`)?.click();
@@ -999,6 +1245,11 @@ async function loadClip(idx) {
 
   // build the UI
   loadMarkers();
+  loadReviews();
+  renderReviews();
+  $('cueLayer').innerHTML = '';
+  $('cueLayerBelow').innerHTML = '';
+  S.pausedByCue = null;
   buildCharts();
   renderTimelineStatic();
   renderEvents();
@@ -1031,6 +1282,8 @@ function tick() {
   if (!S.tele || !S.duration) return;
   const t = video.currentTime;
   $('timeReadout').textContent = fmtTc(t) + ' / ' + fmtTc(S.duration);
+  updateCues(t);
+  if (S.pendingT === null) $('reviewAt').textContent = 'at ' + fmtTc(t);
   if (t !== lastT) {
     lastT = t;
     const i = bisect(S.tele.t, t);
@@ -1087,6 +1340,8 @@ window.addEventListener('resize', () => {
     }
     buildTabs();
     initMap();
+    setRole(localStorage.getItem('camflight-role') === 'operator' ? 'operator' : 'trainer', false);
+    setCuePos(localStorage.getItem('camflight-cue-pos') === 'below' ? 'below' : 'over');
     tick();
     await loadClip(0);
   } catch (err) {
