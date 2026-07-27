@@ -48,7 +48,12 @@
     <div class="video-stage" id="videoStage">
       <video id="video" playsinline preload="auto"></video>
       <button id="bigPlay" class="big-play" aria-label="Play">▶</button>
+      <!-- trainer instructions surface here, at their exact moment -->
+      <div id="cueLayer" class="cue-layer" aria-live="polite"></div>
     </div>
+
+    <!-- same instructions, below the frame, when the image must stay clean -->
+    <div id="cueLayerBelow" class="cue-layer below" aria-live="polite"></div>
 
     <!-- timeline -->
     <canvas id="timeline" class="timeline" height="72"></canvas>
@@ -71,6 +76,7 @@
         <span class="tc-hint mono" id="tcHint">min:sec:frm</span>
       </div>
       <div class="transport-right">
+        <button id="btnReview" class="tbtn accent" title="Write a trainer instruction for this moment (R)">◈ INSTRUCTION</button>
         <button id="btnMarker" class="tbtn accent" title="Drop a marker at this moment (M)">⚑ MARKER</button>
       </div>
     </div>
@@ -134,11 +140,53 @@
   <section class="panel log-panel">
     <div class="tabs">
       <button class="tab active" data-tab="coach">COACHING CUES <span class="count" id="coachCount">0</span></button>
+      <button class="tab" data-tab="review">TRAINER REVIEW <span class="count" id="reviewCount">0</span></button>
       <button class="tab" data-tab="markers">MARKERS <span class="count" id="markerCount">0</span></button>
     </div>
     <div class="tab-body" id="tabCoach">
       <ul class="log-list" id="coachList"></ul>
     </div>
+    <div class="tab-body hidden" id="tabReview">
+      <div class="review-bar">
+        <div class="seg small" role="group" aria-label="Who is using the tool">
+          <button id="btnRoleTrainer" class="seg-btn active" title="Write and edit instructions">TRAINER</button>
+          <button id="btnRoleOperator" class="seg-btn" title="Watch the debrief: instructions play, editing is hidden">OPERATOR</button>
+        </div>
+        <div class="review-bar-right">
+          <button id="btnCuePos" class="mini-btn" title="Show instructions over the video or underneath it">ON VIDEO</button>
+          <button id="btnReviewExport" class="mini-btn">EXPORT REVIEW</button>
+          <label class="mini-btn" for="reviewImport">IMPORT REVIEW</label>
+          <input type="file" id="reviewImport" accept=".json" hidden>
+        </div>
+      </div>
+
+      <form id="reviewForm" class="review-form">
+        <div class="review-form-row">
+          <select id="reviewKind" aria-label="Type of instruction">
+            <option value="instruction">Instruction</option>
+            <option value="improve">Point to improve</option>
+            <option value="safety">Safety</option>
+            <option value="praise">Well done</option>
+          </select>
+          <span class="review-at mono" id="reviewAt">at 00:00:00</span>
+          <label class="review-num">
+            <span>shows for</span>
+            <input id="reviewDur" type="number" min="1" max="60" step="1" value="6">
+            <span>s</span>
+          </label>
+          <label class="review-check">
+            <input id="reviewPause" type="checkbox">
+            <span>pause video here</span>
+          </label>
+        </div>
+        <div class="review-form-row">
+          <input id="reviewText" type="text" placeholder="What should the operator do differently here?" autocomplete="off">
+          <button type="submit" class="tbtn accent">ADD</button>
+        </div>
+      </form>
+      <ul class="log-list" id="reviewList"></ul>
+    </div>
+
     <div class="tab-body hidden" id="tabMarkers">
       <form id="markerForm" class="marker-form">
         <select id="markerCat">
@@ -164,7 +212,7 @@
 </main>
 
 <footer class="foot">
-  <span class="mono">SPACE play · ←/→ frame · SCROLL on video/timeline = frame · SHIFT+←/→ 1s · M marker · T estimate mode · 1-4 speed</span>
+  <span class="mono">SPACE play · ←/→ frame · SCROLL on video/timeline = frame · SHIFT+←/→ 1s · R instruction · M marker · T estimate mode · 1-4 speed</span>
   <span class="mono dim" id="footClip">—</span>
 </footer>
 
